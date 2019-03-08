@@ -49,6 +49,13 @@ static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
 
+/*
+ * In some cases we might need to temporarily disable distributed planning.
+ * An example usecase is skipping constraint checking for ALTER TABLE in
+ * the coordinator node. See the related comments in multi_ProcessUtility().
+ */
+bool distributedPlannerEnabled = true;
+
 
 /* local function forward declarations */
 static bool NeedsDistributedPlanningWalker(Node *node, void *context);
@@ -229,6 +236,11 @@ NeedsDistributedPlanning(Query *query)
 	}
 
 	if (!NeedsDistributedPlanningWalker((Node *) query, NULL))
+	{
+		return false;
+	}
+
+	if (!distributedPlannerEnabled)
 	{
 		return false;
 	}

@@ -1093,7 +1093,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
  * for two things for practial purpose for not doing the same checks
  * twice:
  *     (a) For any command, decide and return whether we should
- *         run the command in sequntial mode
+ *         run the command in sequential mode
  *     (b) For commands in a transaction block, set the transaction local
  *         multi-shard modify mode to sequential when necessary
  *

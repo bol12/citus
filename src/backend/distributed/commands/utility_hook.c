@@ -104,6 +104,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
 	bool checkExtensionVersion = false;
+	bool prevDistributedPlannerEnabled = false;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -419,8 +420,40 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 
 	pstmt->utilityStmt = parsetree;
-	standard_ProcessUtility(pstmt, queryString, context,
-							params, queryEnv, dest, completionTag);
+
+	PG_TRY();
+	{
+		prevDistributedPlannerEnabled = distributedPlannerEnabled;
+
+		/*
+		 * Disable distributed planning for ALTER TABLE constraint validation
+		 * queries. These constraints will be validated in worker nodes, so
+		 * no need to run expensive distributed queries from coordinator.
+		 *
+		 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
+		 * partition doesn't violate constraints of the parent table, which
+		 * might involve running some SELECT queries. Ideally we'd completely
+		 * skip these checks in the coordinator, but we don't have any means to
+		 * tell postgres to skip the checks. So the best we can do is to execute
+		 * these queries locally, where we have no rows at all, so checks will
+		 * always succeed.
+		 *
+		 * See the comments for distributedPlannerEnabled for more information.
+		 */
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			distributedPlannerEnabled = false;
+		}
+
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
+	}
+	PG_CATCH();
+	{
+		distributedPlannerEnabled = prevDistributedPlannerEnabled;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	/*
 	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
