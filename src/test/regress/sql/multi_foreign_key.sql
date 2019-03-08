@@ -563,5 +563,21 @@ CREATE TABLE self_referencing_reference_table(
 SELECT create_reference_table('self_referencing_reference_table');
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);
 
+-- test attaching and detaching partitions from partitioned tables with foreign keys
+DROP TABLE reference_table CASCADE;
+CREATE TABLE reference_table(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+CREATE TABLE partitioning_test_2009 (LIKE partitioning_test);
+
+ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+ALTER TABLE partitioning_test_2009 ADD CONSTRAINT partitioning_reference_fkey_2009 FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
+
+DROP TABLE partitioning_test, partitioning_test_2009;
+
 -- we no longer need those tables
 DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table;
